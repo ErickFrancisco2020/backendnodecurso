@@ -1,6 +1,8 @@
 // clase con los mètodos y rutas relacionadas con los artìculos de la api, se define el objeto y sus mètodos
 'use strict'
 var validator = require('validator');
+var fs = require('fs');
+var path = require('path');
 var Article = require('../models/article');
 
 var controller = {
@@ -190,28 +192,7 @@ var controller = {
     },
 
     upload: (req, res) => {
-        /*
-        //configurar connect multiparty router/article.js
-        //recoger el fichero de la peticion
-        var file_name = 'imagen no subida'
-        if(!req.files){
-            return res.send('Please upload a file')({
-                status: 'error',
-                message: file_name
-            });
-        }
-        //conseguir el nombre y extension del archivo
-        var file_path = req.files.archivo.path;
-        var file_split = file_path.split('\\'); 
-        //comprobar la extension, solo imagenes, si no es valida borrar
-        //si todo es valido
-        //buscar el articulo, asignar el nombre de la imagen y actualizarlo
-        return res.status(404).send({
-            fichero: req.files,
-            split: file_split
-        });
-        */
-        var articleId = req.params.id;
+        var articleId = req.params.id;//id de la url
         if(req.file){
             var file_path = req.file.path; // file es personalizable
             var file_split = file_path.split('\\');
@@ -220,23 +201,79 @@ var controller = {
             var file_ext = ext_split[1]; // ;
 
             if(file_ext == 'png' || file_ext == 'gif' || file_ext == 'jpg' || file_ext == 'jpeg'){
-                Article.findByIdAndUpdate(articleId, {image: file_name}, (err, articleUpdated) => {//antes de la funciòn de callback Vìctor agregò {new:true}
-                    if(!articleUpdated){
-                        res.status(404).send({message: 'No se pudo actualizar la imagen'});
+                Article.findByIdAndUpdate(articleId, {image: file_name}, {new:true}, (err, articleUpdated) => {//findOneAndUpdate. Antes de la funciòn de callback Vìctor agregò {new:true}
+                    if(err || !articleUpdated){
+                        return res.status(404).send({
+                            status: 'error',
+                            message: 'No se pudo actualizar la imagen'
+                        });
                     }else{
-                        res.status(200).send({article: articleUpdated});
+                        return res.status(200).send({
+                            status: 'success',
+                            article: articleUpdated});
                     }
                 }); //creo que falta ;
             }else{
-                res.status(200).send({message: 'Extensiòn del archivo no vàlida'}); // borrar el archivo
+                
+                 // borrar el archivo
+                 fs.unlink(file_path, (err) => {
+                    return res.status(200).send({
+                        status: 'error',
+                        message: 'Sòlo puedes subir imàgenes'
+                    });
+                 });
             }
             console.log(file_path);
         }else{
             res.status(200).send({message: 'No has subido ningùn archivo'}); 
         }
+    },// en el video 81 Vìctor agregò ,
 
-        console.log('nuevo cambio');
-    }// en el video 81 Vìctor agregò ,
+    getImage: (req, res) => {
+        var file = req.params.image;
+        var path_file = './upload/articles/'+file;
+
+        //comprobar que el archivo existe
+        fs.exists(path_file, (exists) => {
+            if(exists){
+                return res.sendFile(path.resolve(path_file));
+            }else{
+                return res.status(404).send({
+                    status: 'error',
+                    message: 'La imagen no existe'
+                });
+            }
+        });
+    },
+
+    search: (req, res) => {
+        //sacar el string a buscar
+        var searchString = req.params.search;
+        //find or
+        Article.find({ "$or": [
+            {"title": {"$regex": searchString, "$options": "i"}},
+            {"content": {"$regex": searchString, "$options": "i"}}
+        ]})
+        .sort([['date', 'descending']])
+        .exec((err, articles) => {
+            if(err){
+                return res.status(500).send({
+                    status: 'error',
+                    message: 'error en la peticiòn'
+                });
+            }
+            if(!articles || articles.length <= 0){
+                return res.status(404).send({
+                    status: 'error',
+                    message: 'No se encontraron artìculos relacionados a tu bùsqueda'
+                });
+            }
+            return res.status(200).send({
+                status: 'success',
+                articles
+            });
+        })
+        
+    }
 }; // end controller
-
 module.exports = controller;
